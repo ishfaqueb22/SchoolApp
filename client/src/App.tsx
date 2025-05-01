@@ -31,6 +31,7 @@ import SchoolAdminNotifications from "@/pages/dashboard/school-admin/notificatio
 const SchoolSetup = SchoolRegistration;
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { Loader2 } from "lucide-react";
+import { preventFocusIssues } from "@/utils/focusManager";
 
 // Lazy load platform admin pages
 import PlatformAdminDashboard from "@/pages/dashboard/platform-admin";
@@ -332,6 +333,54 @@ function Router() {
 }
 
 function App() {
+  // Set up global event handlers for accessibility improvements
+  useEffect(() => {
+    // Track when we're handling focus to prevent infinite loops
+    let isHandlingFocusEvent = false;
+    
+    // Function to check if an element is inside a dialog
+    const isElementInDialog = (element: HTMLElement): boolean => {
+      return !!element.closest('[role="dialog"]');
+    };
+    
+    // Track focus events to detect focus moving outside dialogs
+    const handleFocusIn = (e: FocusEvent) => {
+      // Prevent recursive focus handling
+      if (isHandlingFocusEvent) return;
+      
+      try {
+        isHandlingFocusEvent = true;
+        const target = e.target as HTMLElement;
+        
+        // Check if a dialog exists with aria-hidden="true"
+        const hiddenDialogs = document.querySelectorAll('[role="dialog"][aria-hidden="true"]');
+        if (hiddenDialogs.length > 0 && Array.from(hiddenDialogs).some(dialog => dialog.contains(target))) {
+          // Only blur if the focus is inside a hidden dialog
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }
+
+        // Check if elements with aria-hidden="true" have focus
+        if (target.closest('[aria-hidden="true"]')) {
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+        }
+      } finally {
+        isHandlingFocusEvent = false;
+      }
+    };
+    
+    // Add the event listeners
+    document.addEventListener('focusin', handleFocusIn);
+    
+    // Clean up
+    return () => {
+      document.removeEventListener('focusin', handleFocusIn);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

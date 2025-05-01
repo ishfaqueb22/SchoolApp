@@ -2284,4 +2284,63 @@ export class DatabaseStorage implements IStorage {
     }
   }
   //#endregion
+
+  // Add this method inside the class, around line 1005 near other school-related methods 
+  
+  async deleteSchool(id: number): Promise<boolean> {
+    try {
+      // Start a transaction to ensure all operations succeed or fail together
+      return await db.transaction(async (tx) => {
+        // 1. Delete related school media
+        await tx
+          .delete(schoolMedia)
+          .where(eq(schoolMedia.schoolId, id));
+          
+        // 2. Delete related school category relations
+        await tx
+          .delete(schoolCategoryRelations)
+          .where(eq(schoolCategoryRelations.schoolId, id));
+          
+        // 3. Delete related school posts
+        await tx
+          .delete(schoolPosts)
+          .where(eq(schoolPosts.schoolId, id));
+          
+        // 4. Delete campuses associated with this school
+        await tx
+          .delete(campuses)
+          .where(eq(campuses.schoolId, id));
+          
+        // 5. Delete faculties associated with this school
+        await tx
+          .delete(faculty)
+          .where(eq(faculty.schoolId, id));
+          
+        // 6. Delete reviews for this school
+        await tx
+          .delete(reviews)
+          .where(eq(reviews.schoolId, id));
+          
+        // 7. Delete user-school associations
+        await tx
+          .delete(userSchools)
+          .where(eq(userSchools.schoolId, id));
+          
+        // 8. Delete saved schools entries
+        await tx
+          .delete(savedSchools)
+          .where(eq(savedSchools.schoolId, id));
+          
+        // 9. Finally delete the school itself
+        await tx
+          .delete(schools)
+          .where(eq(schools.id, id));
+          
+        return true;
+      });
+    } catch (error) {
+      console.error(`Error deleting school with id ${id}:`, error);
+      return false;
+    }
+  }
 }

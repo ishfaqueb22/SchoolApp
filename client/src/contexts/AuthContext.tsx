@@ -152,16 +152,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = async () => {
     try {
-      await apiRequest("POST", "/api/auth/logout");
+      // Use the correct parameter order (url, method, data) and handle non-JSON responses
+      await apiRequest("/api/auth/logout", "POST");
       
+      // Set user to null regardless of API response
       setUser(null);
+      
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
       });
+      
+      // Redirect to login page after logout
+      window.location.href = "/login";
     } catch (error) {
       console.error("Logout failed:", error);
-      throw error;
+      
+      // Even if the logout API fails, we should still clear the local user state
+      setUser(null);
+      
+      toast({
+        variant: "destructive",
+        title: "Logout error",
+        description: "There was a problem logging out, but your local session has been cleared.",
+      });
+      
+      // Redirect to login page anyway for safety
+      window.location.href = "/login";
     }
   };
 

@@ -1961,6 +1961,81 @@ export class MemStorage implements IStorage {
       .filter(request => request.userId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
+
+  async deleteSchool(id: number): Promise<boolean> {
+    try {
+      // Check if the school exists
+      if (!this.schools.has(id)) {
+        return false;
+      }
+      
+      // Delete related entities
+      
+      // 1. Delete school media
+      const mediaToDelete = Array.from(this.schoolMedia.values())
+        .filter(media => media.schoolId === id);
+      for (const media of mediaToDelete) {
+        this.schoolMedia.delete(media.id);
+      }
+      
+      // 2. Delete school category relations
+      const schoolCategoryRelationsToDelete = Array.from(this.schoolCategoryRelations.values())
+        .filter(relation => relation.schoolId === id);
+      for (const relation of schoolCategoryRelationsToDelete) {
+        this.schoolCategoryRelations.delete(relation.id);
+      }
+      
+      // 3. Delete school posts
+      const postsToDelete = Array.from(this.schoolPosts.values())
+        .filter(post => post.schoolId === id);
+      for (const post of postsToDelete) {
+        this.schoolPosts.delete(post.id);
+      }
+      
+      // 4. Delete campuses
+      const campusesToDelete = Array.from(this.campuses.values())
+        .filter(campus => campus.schoolId === id);
+      for (const campus of campusesToDelete) {
+        this.campuses.delete(campus.id);
+      }
+      
+      // 5. Delete faculty
+      const facultyToDelete = Array.from(this.faculties.values())
+        .filter(faculty => faculty.schoolId === id);
+      for (const faculty of facultyToDelete) {
+        this.faculties.delete(faculty.id);
+      }
+      
+      // 6. Delete reviews
+      const reviewsToDelete = Array.from(this.reviews.values())
+        .filter(review => review.schoolId === id);
+      for (const review of reviewsToDelete) {
+        this.reviews.delete(review.id);
+      }
+      
+      // 7. Delete user-school associations
+      const userSchoolsToDelete = Array.from(this.userSchoolsMap.values())
+        .filter(userSchool => userSchool.schoolId === id);
+      for (const userSchool of userSchoolsToDelete) {
+        this.userSchoolsMap.delete(userSchool.id);
+      }
+      
+      // 8. Delete saved schools entries
+      const savedSchoolsToDelete = Array.from(this.savedSchools.values())
+        .filter(savedSchool => savedSchool.schoolId === id);
+      for (const savedSchool of savedSchoolsToDelete) {
+        this.savedSchools.delete(savedSchool.id);
+      }
+      
+      // 9. Finally delete the school itself
+      this.schools.delete(id);
+      
+      return true;
+    } catch (error) {
+      console.error(`Error deleting school with id ${id}:`, error);
+      return false;
+    }
+  }
 }
 
 // Import the DatabaseStorage

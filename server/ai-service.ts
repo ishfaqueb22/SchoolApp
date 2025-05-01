@@ -670,4 +670,4 @@ const API_KEY = process.env.GEMINI_API_KEY || "AIzaSyB6MfcrHaPJFNYfcPflwenv-WUj-
 if (!API_KEY) {
   console.error("GEMINI_API_KEY environment variable is not set");
 }
-export const aiService = new AIService(API_KEY);
+export const aiService = new AIService(API_KEY); 

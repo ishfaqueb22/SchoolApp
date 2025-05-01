@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { PlatformAdminLayout } from "@/components/layouts/platform-admin-layout";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Pen, Trash, Plus, Image, Eye } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
+import { executeSafeFocus, isFocusInProgress, observeAriaHiddenChanges } from "@/lib/focusManager";
 
 interface BlogPost {
   id: number;
@@ -61,16 +62,27 @@ export default function BlogPostsPage() {
     metaTitle: "",
     metaDescription: "",
   });
+  const isFocusProcessingRef = useRef(false);
 
   // Fetch blog posts
   const { data: blogPosts = [], isLoading, error, refetch } = useQuery({
     queryKey: ["/api/platform-admin/content/blog"],
     queryFn: async () => {
-      const response = await fetch("/api/platform-admin/content/blog");
-      if (!response.ok) {
-        throw new Error("Failed to fetch blog posts");
+      try {
+        console.log("Fetching blog posts...");
+        const response = await fetch("/api/platform-admin/content/blog");
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error fetching blog posts: ${response.status} ${response.statusText}`, errorText);
+          throw new Error(`Failed to fetch blog posts: ${response.statusText}`);
+        }
+        
+        return response.json();
+      } catch (err) {
+        console.error("Error in blog posts query:", err);
+        throw err;
       }
-      return response.json();
     },
   });
 
@@ -78,18 +90,32 @@ export default function BlogPostsPage() {
   const { data: categories = [] } = useQuery({
     queryKey: ["/api/platform-admin/content/categories", "blog"],
     queryFn: async () => {
-      const response = await fetch("/api/platform-admin/content/categories?type=blog");
-      if (!response.ok) {
-        throw new Error("Failed to fetch categories");
+      try {
+        console.log("Fetching categories...");
+        const response = await fetch("/api/platform-admin/content/categories?type=blog");
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error fetching categories: ${response.status} ${response.statusText}`, errorText);
+          throw new Error(`Failed to fetch categories: ${response.statusText}`);
+        }
+        
+        return response.json();
+      } catch (err) {
+        console.error("Error in categories query:", err);
+        throw err;
       }
-      return response.json();
     },
   });
 
   // Create blog post mutation
   const createBlogPost = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/platform-admin/content/blog", "POST", data),
-    onSuccess: () => {
+    mutationFn: async (data: any) => {
+      console.log("Creating blog post with data:", data);
+      return apiRequest("/api/platform-admin/content/blog", "POST", data);
+    },
+    onSuccess: (data) => {
+      console.log("Blog post created successfully:", data);
       toast({
         title: "Success",
         description: "Blog post created successfully",
@@ -97,8 +123,13 @@ export default function BlogPostsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/platform-admin/content/blog"] });
       setIsCreateDialogOpen(false);
       resetForm();
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     },
     onError: (error: any) => {
+      console.error("Error creating blog post:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to create blog post",
@@ -109,9 +140,12 @@ export default function BlogPostsPage() {
 
   // Update blog post mutation
   const updateBlogPost = useMutation({
-    mutationFn: (data: { id: number; content: any }) => 
-      apiRequest(`/api/platform-admin/content/blog/${data.id}`, "PUT", data.content),
-    onSuccess: () => {
+    mutationFn: async (data: { id: number; content: any }) => {
+      console.log(`Updating blog post ${data.id} with data:`, data.content);
+      return apiRequest(`/api/platform-admin/content/blog/${data.id}`, "PUT", data.content);
+    },
+    onSuccess: (data) => {
+      console.log("Blog post updated successfully:", data);
       toast({
         title: "Success",
         description: "Blog post updated successfully",
@@ -119,8 +153,13 @@ export default function BlogPostsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/platform-admin/content/blog"] });
       setIsEditDialogOpen(false);
       resetForm();
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     },
     onError: (error: any) => {
+      console.error("Error updating blog post:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update blog post",
@@ -131,16 +170,25 @@ export default function BlogPostsPage() {
 
   // Delete blog post mutation
   const deleteBlogPost = useMutation({
-    mutationFn: (id: number) => apiRequest(`/api/platform-admin/content/blog/${id}`, "DELETE"),
-    onSuccess: () => {
+    mutationFn: async (id: number) => {
+      console.log(`Deleting blog post ${id}`);
+      return apiRequest(`/api/platform-admin/content/blog/${id}`, "DELETE");
+    },
+    onSuccess: (data) => {
+      console.log("Blog post deleted successfully:", data);
       toast({
         title: "Success",
         description: "Blog post deleted successfully",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/platform-admin/content/blog"] });
       setIsDeleteDialogOpen(false);
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     },
     onError: (error: any) => {
+      console.error("Error deleting blog post:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to delete blog post",
@@ -151,31 +199,40 @@ export default function BlogPostsPage() {
 
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Submitting create form with data:", formData);
+    
     const postData = {
       ...formData,
       categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
     };
+    
     createBlogPost.mutate(postData);
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Submitting edit form with data:", formData);
+    
     if (selectedPost) {
       const postData = {
         ...formData,
         categoryId: formData.categoryId ? parseInt(formData.categoryId) : null,
       };
+      
       updateBlogPost.mutate({ id: selectedPost.id, content: postData });
     }
   };
 
   const confirmDelete = () => {
     if (selectedPost) {
+      console.log("Confirming deletion of post:", selectedPost.id);
       deleteBlogPost.mutate(selectedPost.id);
     }
   };
 
   const openEditDialog = (post: BlogPost) => {
+    if (isFocusInProgress()) return;
+    
     setSelectedPost(post);
     setFormData({
       title: post.title,
@@ -188,17 +245,30 @@ export default function BlogPostsPage() {
       metaTitle: post.metaTitle || "",
       metaDescription: post.metaDescription || "",
     });
-    setIsEditDialogOpen(true);
+    
+    executeSafeFocus(() => {
+      setIsEditDialogOpen(true);
+    });
   };
 
   const openDeleteDialog = (post: BlogPost) => {
+    if (isFocusInProgress()) return;
+    
     setSelectedPost(post);
-    setIsDeleteDialogOpen(true);
+    
+    executeSafeFocus(() => {
+      setIsDeleteDialogOpen(true);
+    });
   };
 
   const openViewDialog = (post: BlogPost) => {
+    if (isFocusInProgress()) return;
+    
     setSelectedPost(post);
-    setIsViewDialogOpen(true);
+    
+    executeSafeFocus(() => {
+      setIsViewDialogOpen(true);
+    });
   };
 
   const resetForm = () => {
@@ -249,12 +319,93 @@ export default function BlogPostsPage() {
     });
   };
 
+  const safelyCloseAllDialogs = () => {
+    executeSafeFocus(() => {
+      setIsCreateDialogOpen(false);
+      setIsEditDialogOpen(false);
+      setIsDeleteDialogOpen(false);
+      setIsViewDialogOpen(false);
+      
+      setTimeout(() => {
+        document.body.focus();
+      }, 100);
+    });
+  };
+
+  useEffect(() => {
+    // Set up observer for aria-hidden attribute changes
+    const cleanupObserver = observeAriaHiddenChanges((mutations) => {
+      console.log("Detected aria-hidden changes:", mutations.length);
+      
+      // Check if any element with focus is inside an aria-hidden container
+      const activeElement = document.activeElement;
+      if (activeElement && activeElement instanceof HTMLElement) {
+        for (const mutation of mutations) {
+          const target = mutation.target as HTMLElement;
+          const isHidden = target.getAttribute('aria-hidden') === 'true';
+          
+          if (isHidden && target.contains(activeElement)) {
+            console.log("Focus is trapped in an aria-hidden element, moving focus to body");
+            // Just blur the active element without trying to set focus elsewhere
+            activeElement.blur();
+            document.body.focus();
+            break;
+          }
+        }
+      }
+    });
+    
+    return () => {
+      // Clean up observer when component unmounts
+      cleanupObserver();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Setup global error handler
+    const originalOnError = window.onerror;
+    
+    window.onerror = function(message, source, lineno, colno, error) {
+      // Log errors to console with additional context
+      console.error('Caught global error:', { message, source, lineno, colno, error });
+      
+      // If it's a focus-related error, attempt to recover
+      if (message && (message.toString().includes('Maximum call stack size exceeded') || 
+          message.toString().includes('stack size'))) {
+        console.warn('Detected focus-related error, attempting to recover...');
+        
+        // Force all dialogs to close safely
+        safelyCloseAllDialogs();
+        
+        // Return true to indicate we've handled the error
+        return true;
+      }
+      
+      // Call the original handler if it exists
+      return originalOnError ? originalOnError(message, source, lineno, colno, error) : false;
+    };
+    
+    return () => {
+      // Restore original handler when component unmounts
+      window.onerror = originalOnError;
+    };
+  }, []);
+
   return (
     <PlatformAdminLayout>
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Blog Posts</h1>
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog open={isCreateDialogOpen} onOpenChange={(open) => {
+            if (open === false) {
+              executeSafeFocus(() => {
+                setIsCreateDialogOpen(false);
+                resetForm();
+              });
+            } else {
+              setIsCreateDialogOpen(true);
+            }
+          }}>
             <DialogTrigger asChild>
               <Button onClick={() => resetForm()}>
                 <Plus className="mr-2 h-4 w-4" /> Create Post
@@ -482,7 +633,15 @@ export default function BlogPostsPage() {
       </div>
 
       {/* View Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+      <Dialog open={isViewDialogOpen} onOpenChange={(open) => {
+        if (open === false) {
+          executeSafeFocus(() => {
+            setIsViewDialogOpen(false);
+          });
+        } else {
+          setIsViewDialogOpen(true);
+        }
+      }}>
         <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedPost?.title}</DialogTitle>
@@ -518,7 +677,16 @@ export default function BlogPostsPage() {
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        if (open === false) {
+          executeSafeFocus(() => {
+            setIsEditDialogOpen(false);
+            resetForm();
+          });
+        } else {
+          setIsEditDialogOpen(true);
+        }
+      }}>
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>Edit Blog Post</DialogTitle>
@@ -654,7 +822,15 @@ export default function BlogPostsPage() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+        if (open === false) {
+          executeSafeFocus(() => {
+            setIsDeleteDialogOpen(false);
+          });
+        } else {
+          setIsDeleteDialogOpen(true);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Blog Post</DialogTitle>

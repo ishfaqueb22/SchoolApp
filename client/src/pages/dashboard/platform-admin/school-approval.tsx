@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle 
@@ -6,7 +6,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { blurActiveElement, preventFocusIssues, safelyFocusElement, safelyCloseDialog } from '@/utils/focusManager';
 
 interface SchoolChangeRequest {
   id: number;
@@ -163,13 +164,6 @@ export default function SchoolApprovalPage() {
         title: "Success",
         description: "Change request has been processed successfully.",
       });
-      
-      // Reset UI state
-      setIsApproveDialogOpen(false);
-      setIsRejectDialogOpen(false);
-      setSelectedRequest(null);
-      setApprovalNotes('');
-      setRejectionNotes('');
     },
     onError: (error) => {
       console.error("Error processing change request:", error);
@@ -192,7 +186,6 @@ export default function SchoolApprovalPage() {
       status: string;
       verificationStatus: boolean;
     }) => {
-      console.log("Toggling verification status:", { schoolId, status, verificationStatus });
       const response = await apiRequest(
         'PATCH',
         `/api/admin/approval/schools/${schoolId}/status`,
@@ -221,7 +214,12 @@ export default function SchoolApprovalPage() {
         description: "Failed to update verification status. Please try again.",
         variant: "destructive",
       });
+      
       // Reset loading state in case of error
+      setIsVerificationLoading(false);
+    },
+    onSettled: () => {
+      // Always ensure loading state is reset
       setIsVerificationLoading(false);
     }
   });
@@ -237,7 +235,9 @@ export default function SchoolApprovalPage() {
       status: 'approved' | 'rejected';
       rejectionReason?: string;
     }) => {
-      console.log("Updating school approval status:", { schoolId, status, rejectionReason });
+      // Add a slight delay before API call to ensure UI has updated first
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
       const response = await apiRequest(
         'PATCH',
         `/api/admin/approval/schools/${schoolId}/status`,
@@ -246,23 +246,8 @@ export default function SchoolApprovalPage() {
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate relevant queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/approval/schools/status'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/approval/stats'] });
-      
-      // Show success toast
-      toast({
-        title: "Success",
-        description: "School has been updated successfully.",
-      });
-      
-      // Reset UI state
-      setIsDirectApproveDialogOpen(false);
-      setIsDirectRejectDialogOpen(false);
-      setSelectedSchool(null);
-      setSchoolToApprove(null);
-      setSchoolToReject(null);
-      setRejectionReason('');
+      // We don't need to invalidate queries since we're refreshing the page
+      // Toast notifications are handled in each handler function
     },
     onError: (error) => {
       console.error("Error updating school status:", error);
@@ -271,6 +256,9 @@ export default function SchoolApprovalPage() {
         description: "Failed to update school. Please try again.",
         variant: "destructive",
       });
+    },
+    onSettled: () => {
+      // Clearing state is handled through page refresh
     }
   });
 
@@ -288,22 +276,48 @@ export default function SchoolApprovalPage() {
       (school.name && school.name.toLowerCase().includes(searchQuery.toLowerCase()));
   });
   
+  // Add global focus management effect for this page
+  useEffect(() => {
+    // Handle the case where a dialog might be open when the page loads
+    const cleanupFocus = () => {
+      // Ensure we reset any lingering focus issues when component unmounts
+      preventFocusIssues();
+    };
+
+    return cleanupFocus;
+  }, []);
+
   // Event handlers
   const handleViewRequest = (request: SchoolChangeRequest) => {
+    // Ensure no focus issues before opening dialog
+    preventFocusIssues();
     setSelectedRequest(request);
   };
   
   const handleViewSchool = (school: School) => {
+    // Ensure no focus issues before opening dialog
+    preventFocusIssues();
     setSelectedSchool(school);
   };
   
   const handleApproveRequest = async (request: SchoolChangeRequest) => {
     try {
+      // Create a local copy of the request to avoid dependency issues
+      const requestCopy = {...request};
+      const notesCopy = approvalNotes;
+      
+      // Reset UI state before making API call to avoid freezing
+      preventFocusIssues();
+      setIsApproveDialogOpen(false);
+      setSelectedRequest(null);
+      setApprovalNotes('');
+      
+      // Then perform the API call
       await reviewChangeRequestMutation.mutateAsync({
-      requestId: request.id,
-      status: 'approved',
-      notes: approvalNotes
-    });
+        requestId: requestCopy.id,
+        status: 'approved',
+        notes: notesCopy
+      });
       // Success is handled in mutation's onSuccess callback
     } catch (error) {
       // Error is already handled in mutation's onError
@@ -313,11 +327,22 @@ export default function SchoolApprovalPage() {
   
   const handleRejectRequest = async (request: SchoolChangeRequest) => {
     try {
+      // Create a local copy of the request to avoid dependency issues
+      const requestCopy = {...request};
+      const notesCopy = rejectionNotes;
+      
+      // Reset UI state before making API call to avoid freezing
+      preventFocusIssues();
+      setIsRejectDialogOpen(false);
+      setSelectedRequest(null);
+      setRejectionNotes('');
+      
+      // Then perform the API call
       await reviewChangeRequestMutation.mutateAsync({
-      requestId: request.id,
-      status: 'rejected',
-      notes: rejectionNotes
-    });
+        requestId: requestCopy.id,
+        status: 'rejected',
+        notes: notesCopy
+      });
       // Success is handled in mutation's onSuccess callback
     } catch (error) {
       // Error is already handled in mutation's onError
@@ -325,55 +350,153 @@ export default function SchoolApprovalPage() {
     }
   };
   
-  const handleDirectApproveSchool = async (school: School) => {
-    try {
-      await updateSchoolStatusMutation.mutateAsync({
-      schoolId: school.id,
-      status: 'approved'
-    });
-      // Success is handled in the mutation's onSuccess callback
-      setSchoolToApprove(null);
-    } catch (error) {
-      // Error is already handled in mutation's onError, but we need this
-      // catch to prevent UI freezing if an unexpected error occurs
-      console.error("Error in handleDirectApproveSchool:", error);
-      setSchoolToApprove(null);
-    }
+  const handleDirectApproveSchool = (school: School) => {
+    // Create a local copy of the school to avoid dependency issues
+    const schoolCopy = {...school};
+    
+    // Reset UI state before making API call to avoid freezing
+    preventFocusIssues();
+    
+    // First close all dialogs and remove any state that might cause UI issues
+    setIsDirectApproveDialogOpen(false);
+    setSchoolToApprove(null);
+    setSelectedSchool(null);
+    
+    // Force a UI update cycle before making the API call
+    setTimeout(() => {
+      // Then perform the API call - avoid using await which can block the UI
+      updateSchoolStatusMutation.mutate(
+        {
+          schoolId: schoolCopy.id,
+          status: 'approved'
+        },
+        {
+          onSuccess: () => {
+            // Show success toast
+            toast({
+              title: "Success",
+              description: "School has been approved successfully.",
+            });
+            
+            // Refresh the page after a short delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
+          },
+          onError: (error) => {
+            console.error("Error in approving school:", error);
+            toast({
+              title: "Error",
+              description: "Failed to approve school. Please try again.",
+              variant: "destructive",
+            });
+          }
+        }
+      );
+    }, 100); // Short delay to ensure UI updates first
   };
   
-  const handleDirectRejectSchool = async (school: School) => {
-    try {
-      await updateSchoolStatusMutation.mutateAsync({
-      schoolId: school.id,
-      status: 'rejected',
-      rejectionReason: rejectionReason
-    });
-      // Success is handled in the mutation's onSuccess callback
-      setSchoolToReject(null);
-    } catch (error) {
-      // Error is already handled in mutation's onError, but we need this
-      // catch to prevent UI freezing if an unexpected error occurs
-      console.error("Error in handleDirectRejectSchool:", error);
-      setSchoolToReject(null);
-    }
+  const handleDirectRejectSchool = (school: School) => {
+    // Create a local copy of the school and reason to avoid dependency issues
+    const schoolCopy = {...school};
+    const reasonCopy = rejectionReason;
+    
+    // Reset UI state before making API call to avoid freezing
+    preventFocusIssues();
+    
+    // First close all dialogs and remove any state that might cause UI issues
+    setIsDirectRejectDialogOpen(false);
+    setSchoolToReject(null);
+    setRejectionReason('');
+    setSelectedSchool(null);
+    
+    // Force a UI update cycle before making the API call
+    setTimeout(() => {
+      // Then perform the API call - avoid using await which can block the UI
+      updateSchoolStatusMutation.mutate(
+        {
+          schoolId: schoolCopy.id,
+          status: 'rejected',
+          rejectionReason: reasonCopy
+        },
+        {
+          onSuccess: () => {
+            // Show success toast
+            toast({
+              title: "Success",
+              description: "School has been rejected successfully.",
+            });
+            
+            // Refresh the page after a short delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
+          },
+          onError: (error) => {
+            console.error("Error in rejecting school:", error);
+            toast({
+              title: "Error",
+              description: "Failed to reject school. Please try again.",
+              variant: "destructive",
+            });
+          }
+        }
+      );
+    }, 100); // Short delay to ensure UI updates first
   };
 
   // New handler for verify/unverify button
-  const handleToggleVerification = async (school: School) => {
-    try {
-      setIsVerificationLoading(true);
-      await toggleVerificationMutation.mutateAsync({
-        schoolId: school.id,
-        status: school.approvalStatus as string,
-        verificationStatus: !school.verificationStatus
-      });
-      // Success is handled in mutation's onSuccess callback
-    } catch (error) {
-      // Error is already handled in mutation's onError
-      console.error("Error in handleToggleVerification:", error);
-    } finally {
-      setIsVerificationLoading(false);
-    }
+  const handleToggleVerification = (school: School) => {
+    // Create a local copy of the school data to avoid dependency issues
+    const schoolCopy = {...school};
+    const newVerificationStatus = !schoolCopy.verificationStatus;
+    
+    // First ensure no focus issues and clear dialog state
+    preventFocusIssues();
+    setSelectedSchool(null);
+    
+    // Set loading state
+    setIsVerificationLoading(true);
+    
+    // Force a UI update cycle before making the API call
+    setTimeout(() => {
+      // Then perform the API call - avoid using await which can block the UI
+      toggleVerificationMutation.mutate(
+        {
+          schoolId: schoolCopy.id,
+          status: schoolCopy.approvalStatus as string,
+          verificationStatus: newVerificationStatus
+        },
+        {
+          onSuccess: () => {
+            // Ensure loading state is reset
+            setIsVerificationLoading(false);
+            
+            toast({
+              title: "Success",
+              description: `School has been ${newVerificationStatus ? 'verified' : 'unverified'} successfully.`,
+            });
+            
+            // Refresh the page after a short delay
+            setTimeout(() => {
+              window.location.reload();
+            }, 300);
+          },
+          onError: (error) => {
+            console.error("Error toggling verification status:", error);
+            
+            // Ensure loading state is reset
+            setIsVerificationLoading(false);
+            
+            toast({
+              title: "Error",
+              description: "Failed to update verification status. Please try again.",
+              variant: "destructive",
+            });
+          }
+        }
+      );
+    }, 100); // Short delay to ensure UI updates first
   };
 
   // Display loading or error states
@@ -594,10 +717,8 @@ export default function SchoolApprovalPage() {
                         <Button 
                           variant="outline" 
                           onClick={(e) => {
-                            // Prevent event propagation
                             e.preventDefault();
-                            e.stopPropagation();
-                            
+                            setRejectionNotes('');
                             setSelectedRequest(request);
                             setIsRejectDialogOpen(true);
                           }}
@@ -608,10 +729,8 @@ export default function SchoolApprovalPage() {
                         </Button>
                         <Button 
                           onClick={(e) => {
-                            // Prevent event propagation
                             e.preventDefault();
-                            e.stopPropagation();
-                            
+                            setApprovalNotes('');
                             setSelectedRequest(request);
                             setIsApproveDialogOpen(true);
                           }}
@@ -706,18 +825,11 @@ export default function SchoolApprovalPage() {
                             <Button 
                               variant="outline" 
                               onClick={(e) => {
-                                // Prevent event propagation
                                 e.preventDefault();
-                                e.stopPropagation();
-                                
-                                // Close school details dialog first
-                                const schoolCopy = {...school};
+                                setRejectionReason('');
                                 setSelectedSchool(null);
-                                // Store the school for rejection and wait to open dialog
-                                setTimeout(() => {
-                                  setSchoolToReject(schoolCopy);
+                                setSchoolToReject(school);
                                 setIsDirectRejectDialogOpen(true);
-                                }, 100);
                               }}
                             >
                               <XCircle className="h-4 w-4 mr-1" />
@@ -725,18 +837,10 @@ export default function SchoolApprovalPage() {
                             </Button>
                             <Button 
                               onClick={(e) => {
-                                // Prevent event propagation
                                 e.preventDefault();
-                                e.stopPropagation();
-                                
-                                // Close school details dialog first
-                                const schoolCopy = {...school};
                                 setSelectedSchool(null);
-                                // Store the school for approval and wait to open dialog
-                                setTimeout(() => {
-                                  setSchoolToApprove(schoolCopy);
+                                setSchoolToApprove(school);
                                 setIsDirectApproveDialogOpen(true);
-                                }, 100);
                               }}
                             >
                               <CheckCircle className="h-4 w-4 mr-1" />
@@ -761,18 +865,43 @@ export default function SchoolApprovalPage() {
         
         {/* Request Details Dialog */}
         <Dialog 
-          open={!!selectedRequest} 
+          open={!!selectedRequest}
           onOpenChange={(open) => {
             if (!open) {
-              // Use timeout to allow proper focus management and avoid the accessibility error
-              setTimeout(() => {
+              // Use focus manager to ensure clean closing
+              safelyCloseDialog(() => {
                 setSelectedRequest(null);
-              }, 100);
+              });
             }
           }}
         >
         {selectedRequest && (
-            <DialogContent className="max-w-2xl">
+            <DialogContent 
+              className="max-w-2xl"
+              onEscapeKeyDown={(e) => {
+                e.preventDefault();
+                safelyCloseDialog(() => {
+                  setSelectedRequest(null);
+                });
+              }}
+              onInteractOutside={(e) => {
+                // Block outside clicks entirely when focused on interactive elements
+                if (document.activeElement && 
+                    document.activeElement instanceof HTMLElement && 
+                    ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(document.activeElement.tagName)) {
+                  e.preventDefault();
+                }
+              }}
+              onOpenAutoFocus={(e) => {
+                // Prevent auto-focus which can cause accessibility issues
+                e.preventDefault();
+              }}
+              onCloseAutoFocus={(e) => {
+                // Prevent focus being returned to the trigger when closing
+                e.preventDefault();
+                preventFocusIssues();
+              }}
+            >
               <DialogHeader>
                 <DialogTitle>{selectedRequest.requestType === 'registration' ? 'School Registration Request' : 'School Update Request'}</DialogTitle>
                 <DialogDescription>
@@ -864,10 +993,9 @@ export default function SchoolApprovalPage() {
                     <Button 
                       variant="outline" 
                       onClick={(e) => {
-                        // Prevent event propagation
                         e.preventDefault();
-                        e.stopPropagation();
-                        
+                        setRejectionNotes('');
+                        setSelectedRequest(selectedRequest);
                         setIsRejectDialogOpen(true);
                       }}
                     >
@@ -876,10 +1004,9 @@ export default function SchoolApprovalPage() {
                     </Button>
                     <Button 
                       onClick={(e) => {
-                        // Prevent event propagation
                         e.preventDefault();
-                        e.stopPropagation();
-                        
+                        setApprovalNotes('');
+                        setSelectedRequest(selectedRequest);
                         setIsApproveDialogOpen(true);
                       }}
                     >
@@ -897,8 +1024,38 @@ export default function SchoolApprovalPage() {
         </Dialog>
         
         {/* Approval Dialog */}
-        <AlertDialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
-          <AlertDialogContent>
+        <AlertDialog 
+          open={isApproveDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              safelyCloseDialog(() => {
+                setIsApproveDialogOpen(false);
+                setApprovalNotes('');
+              });
+            }
+          }}
+        >
+          <AlertDialogContent
+            onEscapeKeyDown={(e) => {
+              e.preventDefault();
+              safelyCloseDialog(() => {
+                setIsApproveDialogOpen(false);
+                setApprovalNotes('');
+              });
+            }}
+            onOpenAutoFocus={(e) => {
+              // Override default auto-focus behavior
+              e.preventDefault();
+              
+              // Focus on the approval notes text area
+              safelyFocusElement('#approval-notes');
+            }}
+            onCloseAutoFocus={(e) => {
+              // Prevent focus being returned to trigger
+              e.preventDefault();
+              preventFocusIssues();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Approve Request</AlertDialogTitle>
               <AlertDialogDescription>
@@ -916,27 +1073,27 @@ export default function SchoolApprovalPage() {
               />
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => {
-                // Prevent event propagation
-                e.preventDefault();
-                e.stopPropagation();
-                
-                setIsApproveDialogOpen(false);
-                setSchoolToApprove(null);
-              }}>
+              <AlertDialogCancel 
+                onClick={() => {
+                  preventFocusIssues();
+                  safelyCloseDialog(() => {
+                    setIsApproveDialogOpen(false);
+                    setApprovalNotes('');
+                  });
+                }}
+                autoFocus={false}
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction 
-                onClick={(e) => {
-                  // Prevent event propagation
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
+                onClick={() => {
+                  preventFocusIssues();
                   if (selectedRequest) {
                     handleApproveRequest(selectedRequest);
                   }
                 }}
                 disabled={reviewChangeRequestMutation.isPending}
+                autoFocus={false}
               >
                 {reviewChangeRequestMutation.isPending ? (
                   <>
@@ -952,8 +1109,38 @@ export default function SchoolApprovalPage() {
         </AlertDialog>
         
         {/* Rejection Dialog */}
-        <AlertDialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-          <AlertDialogContent>
+        <AlertDialog 
+          open={isRejectDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              safelyCloseDialog(() => {
+                setIsRejectDialogOpen(false);
+                setRejectionNotes('');
+              });
+            }
+          }}
+        >
+          <AlertDialogContent
+            onEscapeKeyDown={(e) => {
+              e.preventDefault();
+              safelyCloseDialog(() => {
+                setIsRejectDialogOpen(false);
+                setRejectionNotes('');
+              });
+            }}
+            onOpenAutoFocus={(e) => {
+              // Override default auto-focus behavior
+              e.preventDefault();
+              
+              // Focus on the rejection notes text area
+              safelyFocusElement('#rejection-notes');
+            }}
+            onCloseAutoFocus={(e) => {
+              // Prevent focus being returned to trigger
+              e.preventDefault();
+              preventFocusIssues();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Reject Request</AlertDialogTitle>
               <AlertDialogDescription>
@@ -971,25 +1158,28 @@ export default function SchoolApprovalPage() {
               />
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => {
-                // Prevent event propagation
-                e.preventDefault();
-                e.stopPropagation();
-                
-                setIsRejectDialogOpen(false);
-              }}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel 
+                onClick={() => {
+                  preventFocusIssues();
+                  safelyCloseDialog(() => {
+                    setIsRejectDialogOpen(false);
+                    setRejectionNotes('');
+                  });
+                }}
+                autoFocus={false}
+              >
+                Cancel
+              </AlertDialogCancel>
               <AlertDialogAction 
-                onClick={(e) => {
-                  // Prevent event propagation
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
+                onClick={() => {
+                  preventFocusIssues();
                   if (selectedRequest) {
                     handleRejectRequest(selectedRequest);
                   }
                 }}
                 disabled={!rejectionNotes.trim() || reviewChangeRequestMutation.isPending}
                 className="bg-destructive hover:bg-destructive/90"
+                autoFocus={false}
               >
                 {reviewChangeRequestMutation.isPending ? (
                   <>
@@ -1006,18 +1196,43 @@ export default function SchoolApprovalPage() {
         
         {/* School Details Dialog */}
         <Dialog 
-          open={!!selectedSchool} 
+          open={!!selectedSchool}
           onOpenChange={(open) => {
             if (!open) {
-              // Use timeout to allow proper focus management and avoid the accessibility error
-              setTimeout(() => {
+              // Use focus manager to ensure clean closing
+              safelyCloseDialog(() => {
                 setSelectedSchool(null);
-              }, 100);
+              });
             }
           }}
         >
         {selectedSchool && (
-            <DialogContent className="max-w-2xl">
+            <DialogContent 
+              className="max-w-2xl"
+              onEscapeKeyDown={(e) => {
+                e.preventDefault();
+                safelyCloseDialog(() => {
+                  setSelectedSchool(null);
+                });
+              }}
+              onInteractOutside={(e) => {
+                // Block outside clicks entirely when focused on interactive elements
+                if (document.activeElement && 
+                    document.activeElement instanceof HTMLElement && 
+                    ['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(document.activeElement.tagName)) {
+                  e.preventDefault();
+                }
+              }}
+              onOpenAutoFocus={(e) => {
+                // Prevent auto-focus which can cause accessibility issues
+                e.preventDefault();
+              }}
+              onCloseAutoFocus={(e) => {
+                // Prevent focus being returned to the trigger when closing
+                e.preventDefault();
+                preventFocusIssues();
+              }}
+            >
               <DialogHeader>
                 <DialogTitle>School Details</DialogTitle>
                 <DialogDescription>
@@ -1085,56 +1300,42 @@ export default function SchoolApprovalPage() {
               
               <DialogFooter className="flex flex-col sm:flex-row gap-2">
                 <div className="flex-1 flex items-center gap-2">
-                  {selectedSchool.approvalStatus === 'approved' && (
-                    <div className="flex items-center">
-                      <Button
-                        variant={selectedSchool.verificationStatus ? "outline" : "default"}
-                        size="sm"
-                        onClick={(e) => {
-                          // Prevent event bubbling that might cause focus issues
-                          e.preventDefault();
-                          e.stopPropagation();
-                          
-                          // Create a copy of the school data
-                          const schoolCopy = {...selectedSchool};
-                          const willVerify = !schoolCopy.verificationStatus;
-                          
-                          // Close the dialog first to avoid focus issues
-                          setSelectedSchool(null);
-                          
-                          // Then process the verification after a small delay
-                          setTimeout(() => {
-                            // Show a toast message to indicate processing
-                            toast({
-                              title: "Processing",
-                              description: `${willVerify ? "Verifying" : "Unverifying"} school...`,
-                            });
-                            
-                            // Perform the verification
-                            handleToggleVerification(schoolCopy);
-                          }, 150);
-                        }}
-                        disabled={isVerificationLoading}
-                      >
-                        {isVerificationLoading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                            Processing...
-                          </>
-                        ) : selectedSchool.verificationStatus ? (
-                          <>
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Unverify
-                          </>
-                        ) : (
-                          <>
-                            <ShieldCheck className="h-4 w-4 mr-1" />
-                            Verify
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  )}
+                  <Button
+                    variant={selectedSchool.verificationStatus ? "outline" : "default"}
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      
+                      // Create local copy of school data
+                      const schoolCopy = {...selectedSchool};
+                      
+                      // Close dialog first
+                      setSelectedSchool(null);
+                      
+                      // Wait for dialog to close, then toggle verification
+                      setTimeout(() => {
+                        handleToggleVerification(schoolCopy);
+                      }, 50);
+                    }}
+                    disabled={isVerificationLoading}
+                  >
+                    {isVerificationLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        Processing...
+                      </>
+                    ) : selectedSchool.verificationStatus ? (
+                      <>
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Unverify
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="h-4 w-4 mr-1" />
+                        Verify
+                      </>
+                    )}
+                  </Button>
                 </div>
                 
                 <div className="flex gap-2">
@@ -1143,18 +1344,11 @@ export default function SchoolApprovalPage() {
                       <Button 
                         variant="outline" 
                         onClick={(e) => {
-                          // Prevent event propagation
                           e.preventDefault();
-                          e.stopPropagation();
-                          
-                          // Close school details dialog first
-                          const schoolCopy = {...selectedSchool};
+                          setRejectionReason('');
                           setSelectedSchool(null);
-                          // Store the school for rejection and wait to open dialog
-                          setTimeout(() => {
-                            setSchoolToReject(schoolCopy);
+                          setSchoolToReject(selectedSchool);
                           setIsDirectRejectDialogOpen(true);
-                          }, 100);
                         }}
                       >
                         <XCircle className="h-4 w-4 mr-1" />
@@ -1162,18 +1356,9 @@ export default function SchoolApprovalPage() {
                       </Button>
                       <Button 
                         onClick={(e) => {
-                          // Prevent event propagation
                           e.preventDefault();
-                          e.stopPropagation();
-                          
-                          // Close school details dialog first
-                          const schoolCopy = {...selectedSchool};
-                          setSelectedSchool(null);
-                          // Store the school for approval and wait to open dialog
-                          setTimeout(() => {
-                            setSchoolToApprove(schoolCopy);
+                          setSchoolToApprove(selectedSchool);
                           setIsDirectApproveDialogOpen(true);
-                          }, 100);
                         }}
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
@@ -1192,16 +1377,37 @@ export default function SchoolApprovalPage() {
         
         {/* Direct Approve School Dialog */}
         <AlertDialog 
-          open={isDirectApproveDialogOpen} 
+          open={isDirectApproveDialogOpen}
           onOpenChange={(open) => {
-            setIsDirectApproveDialogOpen(open);
             if (!open) {
-              // Clear school reference when dialog is closed without action
-              setSchoolToApprove(null);
+              safelyCloseDialog(() => {
+                setIsDirectApproveDialogOpen(false);
+                setSchoolToApprove(null);
+              });
             }
           }}
         >
-          <AlertDialogContent>
+          <AlertDialogContent
+            onEscapeKeyDown={(e) => {
+              e.preventDefault();
+              safelyCloseDialog(() => {
+                setIsDirectApproveDialogOpen(false);
+                setSchoolToApprove(null);
+              });
+            }}
+            onOpenAutoFocus={(e) => {
+              // Override default auto-focus behavior
+              e.preventDefault();
+              
+              // Focus on the approve button
+              safelyFocusElement('[data-approve-button="true"]');
+            }}
+            onCloseAutoFocus={(e) => {
+              // Prevent focus being returned to trigger
+              e.preventDefault();
+              preventFocusIssues();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Approve School</AlertDialogTitle>
               <AlertDialogDescription>
@@ -1213,27 +1419,27 @@ export default function SchoolApprovalPage() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => {
-                // Prevent event propagation
-                e.preventDefault();
-                e.stopPropagation();
-                
-                setIsDirectApproveDialogOpen(false);
-                setSchoolToApprove(null);
-              }}>
+              <AlertDialogCancel 
+                onClick={() => {
+                  preventFocusIssues();
+                  safelyCloseDialog(() => {
+                    setIsDirectApproveDialogOpen(false);
+                    setSchoolToApprove(null);
+                  });
+                }}
+                autoFocus={false}
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction 
-                onClick={(e) => {
-                  // Prevent event propagation
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
+                data-approve-button="true"
+                onClick={() => {
                   if (schoolToApprove) {
                     handleDirectApproveSchool(schoolToApprove);
                   }
                 }}
                 disabled={updateSchoolStatusMutation.isPending}
+                autoFocus={false}
               >
                 {updateSchoolStatusMutation.isPending ? (
                   <>
@@ -1250,17 +1456,39 @@ export default function SchoolApprovalPage() {
         
         {/* Direct Reject School Dialog */}
         <AlertDialog 
-          open={isDirectRejectDialogOpen} 
+          open={isDirectRejectDialogOpen}
           onOpenChange={(open) => {
-            setIsDirectRejectDialogOpen(open);
             if (!open) {
-              // Clear school reference and reason when dialog is closed without action
-              setSchoolToReject(null);
-              setRejectionReason("");
+              safelyCloseDialog(() => {
+                setIsDirectRejectDialogOpen(false);
+                setSchoolToReject(null);
+                setRejectionReason("");
+              });
             }
           }}
         >
-          <AlertDialogContent>
+          <AlertDialogContent
+            onEscapeKeyDown={(e) => {
+              e.preventDefault();
+              safelyCloseDialog(() => {
+                setIsDirectRejectDialogOpen(false);
+                setSchoolToReject(null);
+                setRejectionReason("");
+              });
+            }}
+            onOpenAutoFocus={(e) => {
+              // Override default auto-focus behavior
+              e.preventDefault();
+              
+              // Focus on the rejection reason text area
+              safelyFocusElement('#direct-rejection-reason');
+            }}
+            onCloseAutoFocus={(e) => {
+              // Prevent focus being returned to trigger
+              e.preventDefault();
+              preventFocusIssues();
+            }}
+          >
             <AlertDialogHeader>
               <AlertDialogTitle>Reject School</AlertDialogTitle>
               <AlertDialogDescription>
@@ -1282,29 +1510,28 @@ export default function SchoolApprovalPage() {
               />
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={(e) => {
-                // Prevent event propagation
-                e.preventDefault();
-                e.stopPropagation();
-                
-                setIsDirectRejectDialogOpen(false);
-                setSchoolToReject(null);
-                setRejectionReason("");
-              }}>
+              <AlertDialogCancel 
+                onClick={() => {
+                  preventFocusIssues();
+                  safelyCloseDialog(() => {
+                    setIsDirectRejectDialogOpen(false);
+                    setSchoolToReject(null);
+                    setRejectionReason("");
+                  });
+                }}
+                autoFocus={false}
+              >
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction 
-                onClick={(e) => {
-                  // Prevent event propagation
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
+                onClick={() => {
                   if (schoolToReject) {
                     handleDirectRejectSchool(schoolToReject);
                   }
                 }}
                 disabled={!rejectionReason.trim() || updateSchoolStatusMutation.isPending}
                 className="bg-destructive hover:bg-destructive/90"
+                autoFocus={false}
               >
                 {updateSchoolStatusMutation.isPending ? (
                   <>
