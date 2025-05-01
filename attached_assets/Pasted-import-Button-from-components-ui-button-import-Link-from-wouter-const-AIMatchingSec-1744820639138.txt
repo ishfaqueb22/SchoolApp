@@ -1,0 +1,82 @@
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+
+const AIMatchingSection = () => {
+  return (
+    <section className="mb-12" id="ai-matching">
+      <div className="bg-gradient-to-r from-primary-600 to-primary-800 rounded-xl overflow-hidden shadow-lg">
+        <div className="px-6 py-12 md:px-12 text-center md:text-left md:flex md:items-center">
+          <div className="w-full md:w-7/12 md:mr-12">
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Get personalized school recommendations
+            </h2>
+            <p className="text-primary-100 mb-6">
+              Our AI-powered matching system will help you find the perfect schools based on your
+              child's needs, interests, and your preferences.
+            </p>
+            <div className="inline-flex rounded-md shadow">
+              <Link href="/quiz">
+                <Button
+                  variant="secondary" 
+                  size="lg"
+                  className="bg-white hover:bg-gray-50 text-primary-700"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-2"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  Start SmartMatch Quiz
+                </Button>
+              </Link>
+            </div>
+          </div>
+          <div className="w-full md:w-5/12 mt-8 md:mt-0">
+            <div className="bg-white rounded-lg p-5 shadow-lg">
+              <div className="flex items-center mb-4">
+                <img
+                  className="h-10 w-10 rounded-full"
+                  src="https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=922&q=80"
+                  alt="SmartMatch Assistant avatar"
+                />
+                <div className="ml-3">
+                  <div className="text-sm font-medium text-gray-900">SmartMatch Assistant</div>
+                  <div className="text-xs text-gray-500">Online</div>
+                </div>
+              </div>
+              <div className="bg-gray-100 rounded-lg p-3 mb-3">
+                <p className="text-sm text-gray-700">
+                  Hi there! I can help you find the perfect school for your child. Would you like to
+                  tell me about your child's interests and learning style?
+                </p>
+              </div>
+              <div className="flex mt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1 mr-2 bg-primary-100 hover:bg-primary-200 text-primary-800 border-0"
+                >
+                  Yes, let's get started
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1 ml-2 bg-gray-100 hover:bg-gray-200 text-gray-700 border-0"
+                >
+                  I'll do this later
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default AIMatchingSection;

@@ -1,0 +1,133 @@
+Create a premium full-stack "SmartSchool Finder" web application with stunning, modern UI/UX design that includes all these features:
+
+TECH STACK:
+Frontend:
+- React.js with TypeScript + Vite
+- Tailwind CSS with custom animations and transitions
+- Framer Motion for advanced micro-interactions
+- Google Maps API + Mapbox integration
+- Formik + Yup for forms
+- Redux Toolkit + RTK Query for state
+- Socket.io for real-time features
+
+Backend:
+- Nest.js framework
+- RESTful + GraphQL API endpoints
+- PostgreSQL (structured data)
+- MongoDB (unstructured data)
+- Redis for caching
+- Elasticsearch for search
+- JWT authentication
+- RBAC (User/School Admin/Platform Admin)
+
+CORE FEATURES:
+
+1. AI-Powered School Matching:
+   - Personalized chatbot (OpenAI/LLM integration)
+   - SmartMatch quiz with recommendation engine
+   - Conversational interface with chat history
+   - FAQ answering system
+   - Preference-based school suggestions
+
+2. School Discovery:
+   - Advanced filters (location, curriculum, fees, etc.)
+   - Interactive map with heatmaps
+   - Virtual tours (360° photos/videos)
+   - Comparison matrix tool
+   - Saved searches with alerts
+
+3. School Social Hub:
+   - Facebook-like feed for each school
+   - Post types: Events, News, Videos, Galleries
+   - Like/Comment/Share functionality
+   - RSVP system for events
+   - Hashtag discovery system
+
+4. User Features:
+   - Social login (Google, Facebook)
+   - Personalized dashboard
+   - School shortlists
+   - Appointment scheduling
+   - Parent forums
+   - Scholarship portal
+   - Alumni network
+
+5. School Admin Features:
+   - Rich profile management
+   - Multi-campus support
+   - Content posting system
+   - Analytics dashboard
+   - Inquiry management
+   - Review monitoring
+
+6. Platform Admin:
+   - Comprehensive moderation tools
+   - User management
+   - School verification
+   - Content approval
+   - System analytics
+
+DESIGN REQUIREMENTS:
+- Implement a premium, clean UI with:
+  * Custom design system with cohesive color palette
+  * Professional typography hierarchy
+  * Micro-interactions and smooth animations
+  * Fully responsive mobile-first layout
+  * Accessibility compliant (WCAG 2.1 AA)
+  * Dark/light mode toggle
+- Dashboard layouts with:
+  * Data visualization components
+  * Card-based design
+  * Consistent spacing system
+  * Loading skeletons
+- School profiles with:
+  * Hero sections with media galleries
+  * Tabbed information architecture
+  * Clear CTAs
+  * Rating visualization
+
+MEDIA HANDLING:
+- Video processing pipeline:
+  * Upload/transcoding/streaming
+  * Thumbnail generation
+  * Content moderation
+- Image handling:
+  * Optimized loading
+  * Galleries with lightbox
+  * AI content filtering
+
+PERFORMANCE & SECURITY:
+- Implement:
+  * Code splitting
+  * Lazy loading
+  * Image optimization
+  * API rate limiting
+  * Comprehensive logging
+  * Regular backup system
+- Security:
+  * Data encryption
+  * CSRF protection
+  * Content moderation
+  * Privacy controls
+
+DEPLOYMENT:
+- Replit-ready configuration
+- Docker setup
+- CI/CD pipeline
+- Monitoring integration
+- Load testing config
+
+DOCUMENTATION:
+- Comprehensive README
+- Swagger API docs
+- JSDoc code comments
+- User guides
+- Admin manuals
+
+TESTING:
+- Jest/React Testing Library
+- Supertest for APIs
+- E2E with Cypress
+- Load testing
+
+Include all features in a well-organized architecture with proper separation of concerns. Prioritize creating an intuitive, visually stunning interface that maintains excellent performance across all device types. The design should feel modern and premium while remaining highly functional.
